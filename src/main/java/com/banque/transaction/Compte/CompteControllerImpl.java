@@ -4,6 +4,7 @@ import com.banque.transaction.ServerResponse.ServerResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -26,11 +27,13 @@ public class CompteControllerImpl implements CompteControllerInt {
     }
 
     @Override
+    @PreAuthorize("@accessGuard.canAccessCompte(#id)")
     public ResponseEntity<CompteDto> findById(UUID id) {
         return ResponseEntity.ok(compteService.findById(id));
     }
 
     @Override
+    @PreAuthorize("@accessGuard.isSelfOrStaff(#clientId)")
     public ResponseEntity<List<CompteDto>> findByClient(UUID clientId) {
         return ResponseEntity.ok(compteService.findByClient(clientId));
     }

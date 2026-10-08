@@ -15,6 +15,7 @@ public interface CompteRepository extends JpaRepository<Compte, UUID> {
     boolean existsByNumero(String numero);
 
     List<Compte> findByClientId(UUID clientId);
+    boolean existsByIdAndClientId(UUID id, UUID clientId);
 
     /** SELECT ... FOR UPDATE : bloque la ligne tant que la transaction n'est pas terminée (R7). */
     @Lock(LockModeType.PESSIMISTIC_WRITE)

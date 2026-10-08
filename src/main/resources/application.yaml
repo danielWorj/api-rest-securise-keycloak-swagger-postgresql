@@ -2,19 +2,47 @@ spring:
   application:
     name: transaction
 
+  # Pour la connexion à la base de données, on peut utiliser des variables d'environnement (ou des valeurs par défaut)
   datasource:
-    url: jdbc:postgresql://localhost:5432/banque
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/banque}
     username: ${DB_USER:postgres}
     password: ${DB_PASSWORD:postgres}
 
   jpa:
     hibernate:
       ddl-auto: update        # DEV uniquement. En production : Flyway/Liquibase + "validate"
-    open-in-view: false       # on mappe vers les DTO dans les services @Transactional
-    show-sql: true
+    open-in-view: false
+    show-sql: false           # passez à true ponctuellement pour déboguer
     properties:
       hibernate:
         format_sql: true
+ #   volet Securite
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # 1) Valeur attendue du claim "iss" dans le jeton = URL PUBLIQUE de Keycloak
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8080/realms/banque}
+          # 2) URL où l'API va chercher les clés = URL INTERNE (dans Docker : http://keycloak:8080/...)
+          jwk-set-uri: ${KEYCLOAK_JWK_URI:http://localhost:8080/realms/banque/protocol/openid-connect/certs}
 
 server:
-  port: 8081                  # laisse le 8080 libre pour Keycloak plus tard
+  port: ${SERVER_PORT:8081}   # 8080 est réservé à Keycloak
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info  # rien d'autre n'est exposé
+
+app:
+  keycloak:
+    public-url: ${APP_KEYCLOAK_PUBLIC_URL:http://localhost:8080/realms/banque}   # utilisé par Swagger UI
+  cors:
+    allowed-origins: ${APP_CORS_ORIGINS:http://localhost:4200}                   # votre futur front
+
+springdoc:
+  swagger-ui:
+    oauth:
+      client-id: banque-swagger #authentification client pour Swagger UI (Keycloak)
+      use-pkce-with-authorization-code-grant: true

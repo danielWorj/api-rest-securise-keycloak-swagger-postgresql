@@ -15,7 +15,7 @@ public class RetraitDto {
     private UUID id;                  // en lecture seule
     private LocalDateTime date;       // en lecture seule
 
-    @NotNull(message = "Le client est obligatoire")
+
     private UUID clientId;
 
     @NotNull(message = "Le compte est obligatoire")

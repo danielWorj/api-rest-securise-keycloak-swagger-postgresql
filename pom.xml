@@ -77,6 +77,31 @@
 			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
 			<version>3.0.3</version>
 		</dependency>
+		<!-- Spring Security -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security</artifactId>
+		</dependency>
+
+		<!-- API = serveur de ressources : valide les JWT émis par Keycloak -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security-oauth2-resource-server</artifactId>
+		</dependency>
+
+		<!-- /actuator/health pour le healthcheck Docker -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
+
+		<!-- Tests : @WithMockUser, jwt() de MockMvc... -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+
 	</dependencies>
 
 	<build>

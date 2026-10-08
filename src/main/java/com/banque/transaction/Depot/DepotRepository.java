@@ -10,4 +10,8 @@ public interface DepotRepository extends JpaRepository<Depot, UUID> {   // ← U
     List<Depot> findByCompteIdOrderByDateDesc(UUID compteId);
 
     List<Depot> findByClientIdOrderByDateDesc(UUID clientId);
+
+    boolean existsByIdAndClientId(UUID id, UUID clientId);
+    boolean existsByIdAndCompteClientId(UUID id, UUID clientId);
+
 }

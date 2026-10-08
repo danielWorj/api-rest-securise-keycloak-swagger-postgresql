@@ -10,4 +10,6 @@ public interface RetraitRepository extends JpaRepository<Retrait, UUID> {
     List<Retrait> findByCompteIdOrderByDateDesc(UUID compteId);
 
     List<Retrait> findByClientIdOrderByDateDesc(UUID clientId);
+
+    boolean existsByIdAndClientId(UUID id, UUID clientId);
 }

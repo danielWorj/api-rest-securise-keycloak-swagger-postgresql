@@ -24,8 +24,6 @@ public class DepotDto {
     @Digits(integer = 17, fraction = 2, message = "Le montant admet 2 décimales au maximum")
     private BigDecimal montant;
 
-    @NotBlank(message = "La secrétaire est obligatoire")
-    @Size(max = 100, message = "Le nom de la secrétaire ne doit pas dépasser 100 caractères")
     private String secretaire;
 
     public static DepotDto from(Depot depot) {
