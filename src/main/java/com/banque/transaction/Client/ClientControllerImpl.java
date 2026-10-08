@@ -1,28 +1,43 @@
 package com.banque.transaction.Client;
 
 import com.banque.transaction.ServerResponse.ServerResponse;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
-import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
-public class ClientControllerImpl implements  ClientControllerInt{
-    @Autowired
-    private ClientRepository clientRepository;
+@RequiredArgsConstructor
+public class ClientControllerImpl implements ClientControllerInt {
+
+    private final ClientService clientService;
+
     @Override
-    public ResponseEntity<List<Client>> findAllClient() {
-        return ResponseEntity.ok(this.clientRepository.findAll());
+    public ResponseEntity<ClientDto> createClient(ClientDto dto) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(clientService.create(dto));
     }
+
     @Override
-    public ResponseEntity<Client> findById(String id) {
-        return ResponseEntity.ok(this.clientRepository.findById(id).orElse(null));
+    public ResponseEntity<List<ClientDto>> findAllClient() {
+        return ResponseEntity.ok(clientService.findAll());
     }
+
     @Override
-    public ResponseEntity<ServerResponse> deleteClient(String id) {
-        this.clientRepository.deleteById(id);
-        return ResponseEntity.ok(new ServerResponse("Client supprime avec success",true));
+    public ResponseEntity<ClientDto> findById(UUID id) {
+        return ResponseEntity.ok(clientService.findById(id));
+    }
+
+    @Override
+    public ResponseEntity<ClientDto> updateClient(UUID id, ClientDto dto) {
+        return ResponseEntity.ok(clientService.update(id, dto));
+    }
+
+    @Override
+    public ResponseEntity<ServerResponse> deleteClient(UUID id) {
+        clientService.delete(id);
+        return ResponseEntity.ok(new ServerResponse("Client supprimé avec succès", true));
     }
 }

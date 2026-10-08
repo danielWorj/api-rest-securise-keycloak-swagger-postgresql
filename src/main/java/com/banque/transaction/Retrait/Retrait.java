@@ -1,4 +1,4 @@
-package com.banque.transaction.Depot;
+package com.banque.transaction.Retrait;
 
 import com.banque.transaction.Client.Client;
 import com.banque.transaction.Compte.Compte;
@@ -11,32 +11,26 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "depot")
+@Table(name = "retrait")
 @Getter
 @Setter
-public class Depot {
+public class Retrait {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    /** Client qui effectue le dépôt (pas forcément le propriétaire du compte, cf. R3). */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "client_id")
     private Client client;
 
-    /** Compte crédité. */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "compte_id")
     private Compte compte;
 
     @Column(nullable = false, precision = 19, scale = 2)
-    private BigDecimal montant;   // BigDecimal pour l'argent, jamais double
+    private BigDecimal montant;
 
-    /** Secrétaire qui a enregistré le dépôt. */
-    @Column(nullable = false, length = 100)
-    private String secretaire;
-
-    @Column(name = "date_depot", nullable = false)
+    @Column(name = "date_retrait", nullable = false)
     private LocalDateTime date;
 }

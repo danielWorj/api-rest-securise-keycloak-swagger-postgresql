@@ -1,3 +1,20 @@
 spring:
   application:
     name: transaction
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/banque
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
+
+  jpa:
+    hibernate:
+      ddl-auto: update        # DEV uniquement. En production : Flyway/Liquibase + "validate"
+    open-in-view: false       # on mappe vers les DTO dans les services @Transactional
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+server:
+  port: 8081                  # laisse le 8080 libre pour Keycloak plus tard

@@ -1,0 +1,43 @@
+package com.banque.transaction.Compte;
+
+import com.banque.transaction.ServerResponse.ServerResponse;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+import java.util.UUID;
+
+@RestController
+@RequiredArgsConstructor
+public class CompteControllerImpl implements CompteControllerInt {
+
+    private final CompteService compteService;
+
+    @Override
+    public ResponseEntity<CompteDto> createCompte(CompteDto dto) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(compteService.create(dto));
+    }
+
+    @Override
+    public ResponseEntity<List<CompteDto>> findAllCompte() {
+        return ResponseEntity.ok(compteService.findAll());
+    }
+
+    @Override
+    public ResponseEntity<CompteDto> findById(UUID id) {
+        return ResponseEntity.ok(compteService.findById(id));
+    }
+
+    @Override
+    public ResponseEntity<List<CompteDto>> findByClient(UUID clientId) {
+        return ResponseEntity.ok(compteService.findByClient(clientId));
+    }
+
+    @Override
+    public ResponseEntity<ServerResponse> deleteCompte(UUID id) {
+        compteService.delete(id);
+        return ResponseEntity.ok(new ServerResponse("Compte supprimé avec succès", true));
+    }
+}
