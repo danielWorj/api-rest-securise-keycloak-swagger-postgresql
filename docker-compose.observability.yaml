@@ -18,6 +18,10 @@ services:
     environment:
       # Actuators (health + prometheus) sur un port séparé, NON publié : seul le réseau Docker y accède.
       MANAGEMENT_SERVER_PORT: "8283"
+      # application.yaml n'expose que health,info : on ajoute prometheus (port de management uniquement)
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,prometheus
+      # Label "application" attendu par les alertes et le dashboard Grafana
+      MANAGEMENT_METRICS_TAGS_APPLICATION: transaction
       # Logs JSON (1 ligne = 1 objet) : Loki/Grafana peuvent filtrer sur level, logger_name...
       LOGGING_STRUCTURED_FORMAT_CONSOLE: logstash
     # /actuator/health a changé de port : on remplace le HEALTHCHECK du Dockerfile

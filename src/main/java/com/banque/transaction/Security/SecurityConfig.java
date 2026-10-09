@@ -36,6 +36,8 @@ public class SecurityConfig {
                         // --- Public : documentation et santé ---
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
+                        // Scrape Prometheus : exposé uniquement via le port de management (non publié) quand l'observabilité est activée
+                        .requestMatchers("/actuator/prometheus").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
                         // --- Personnel uniquement ---
