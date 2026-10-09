@@ -108,15 +108,56 @@
 			<artifactId>spring-boot-testcontainers</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!-- Module PostgreSQL : fournit org.testcontainers.postgresql.PostgreSQLContainer.
+		     Avec Testcontainers 2.x l'artefact s'appelle "testcontainers-postgresql" (ancien nom : "postgresql").
+		     Version gérée par le BOM de Spring Boot : ne pas la fixer ici. -->
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>testcontainers-postgresql</artifactId>
+			<scope>test</scope>
+		</dependency>
 
 	</dependencies>
 
 	<build>
+		<!--
+			Ressources de test.
+			Redéclarer <testResources> REMPLACE la valeur par défaut : il faut donc relister
+			src/test/resources (application-test.yaml...) en plus du realm Keycloak.
+			Le realm est copié dans target/test-classes/keycloak/realm-banque.json, là où
+			Containers.java le cherche via MountableFile.forClasspathResource(...).
+			La source de vérité reste keycloak/realm-banque.json (utilisé aussi par docker-compose).
+		-->
+		<testResources>
+			<testResource>
+				<directory>src/test/resources</directory>
+			</testResource>
+			<testResource>
+				<directory>${project.basedir}/keycloak</directory>
+				<targetPath>keycloak</targetPath>
+				<includes>
+					<include>realm-banque.json</include>
+				</includes>
+			</testResource>
+		</testResources>
+
 		<plugins>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
+
+			<!--
+				Failsafe exécute les tests d'intégration (*IT.java) pendant `mvn verify`.
+				Surefire (`mvn test`) ne lance que les tests unitaires (*Test, *Tests).
+				Version et goals integration-test/verify sont préconfigurés par spring-boot-starter-parent.
+				Les tests d'intégration nécessitent Docker (Testcontainers : PostgreSQL + Keycloak).
+			-->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-failsafe-plugin</artifactId>
+			</plugin>
+
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
