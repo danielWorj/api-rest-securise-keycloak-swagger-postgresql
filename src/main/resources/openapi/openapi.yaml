@@ -1,3 +1,5 @@
+# Description de l'API Banque (clients, comptes, dépôts, retraits).
+# Si on change un port ou une adresse Keycloak, il faut penser à le mettre à jour ici aussi.
 openapi: 3.0.3
 info:
   title: API Banque
@@ -16,9 +18,14 @@ info:
     name: Équipe Banque
     email: contact@example.com
 
+# L'adresse de l'API. Par défaut c'est http://localhost:8282 (le SERVER_PORT du .env)
 servers:
-  - url: http://localhost:8081
-    description: Développement local
+  - url: "{scheme}://{host}:{port}"
+    description: Serveur de l'API (valeurs par défaut = SERVER_PORT du .env)
+    variables:
+      scheme: { default: http, enum: [http, https] }
+      host: { default: localhost }
+      port: { default: "8282" }
 
 tags:
   - name: Clients
@@ -30,12 +37,14 @@ tags:
   - name: Retraits
     description: Retraits d'argent (réservé au client, depuis son propre compte)
 
+# Par défaut tout est protégé : soit on se connecte avec Keycloak, soit on colle un jeton
 security:
   - keycloak-oauth2: [openid]
   - bearer-jwt: []
 
+# Toutes les routes de l'API, rangées par Module
 paths:
-  # ------------------------------------------------------------------ CLIENTS
+  # Clients
   /api/client/create:
     post:
       tags: [Clients]
@@ -152,7 +161,7 @@ paths:
               schema: { $ref: "#/components/schemas/ServerResponse" }
         "500": { $ref: "#/components/responses/InternalError" }
 
-  # ------------------------------------------------------------------ COMPTES
+  #  Comptes
   /api/compte/create:
     post:
       tags: [Comptes]
@@ -262,7 +271,7 @@ paths:
               schema: { $ref: "#/components/schemas/ServerResponse" }
         "500": { $ref: "#/components/responses/InternalError" }
 
-  # ------------------------------------------------------------------ DEPOTS
+  #  Dépôts
   /api/depot/create:
     post:
       tags: [Dépôts]
@@ -366,7 +375,7 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
 
-  # ------------------------------------------------------------------ RETRAITS
+  #  Retraits
   /api/retrait/create:
     post:
       tags: [Retraits]
@@ -483,23 +492,32 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+# Les morceaux qu'on réutilise un peu partout dans le fichier
 components:
+  # Les deux façons de s'authentifier
   securitySchemes:
+    # Connexion avec la page de login Keycloak.
+    # Les adresses sont celles du dev en local (port 8585, realm "banque").
     keycloak-oauth2:
       type: oauth2
-      description: Connexion via Keycloak (Authorization Code + PKCE)
+      description: |
+        Connexion via Keycloak (Authorization Code + PKCE).
+        Les URLs ci-dessous sont celles du développement local.
+        La version servie par l'API (/v3/api-docs) reprend automatiquement celles du .env.
       flows:
         authorizationCode:
-          authorizationUrl: http://localhost:8080/realms/banque/protocol/openid-connect/auth
-          tokenUrl: http://localhost:8080/realms/banque/protocol/openid-connect/token
+          authorizationUrl: http://localhost:8585/realms/banque/protocol/openid-connect/auth
+          tokenUrl: http://localhost:8585/realms/banque/protocol/openid-connect/token
           scopes:
             openid: OpenID Connect
+    # Pour ceux qui ont déjà un jeton (récupéré avec curl par exemple) et veulent juste le coller
     bearer-jwt:
       type: http
       scheme: bearer
       bearerFormat: JWT
       description: Jeton d'accès obtenu auprès de Keycloak
 
+  # Les paramètres d'URL qui reviennent souvent
   parameters:
     Id:
       name: id
@@ -520,6 +538,7 @@ components:
       description: Identifiant du compte (UUID)
       schema: { type: string, format: uuid }
 
+  # Les erreurs qu'on retrouve sur presque toutes les routes
   responses:
     BadRequest:
       description: Requête invalide (champ manquant ou invalide, JSON illisible, UUID mal formé)
@@ -551,7 +570,9 @@ components:
           schema: { $ref: "#/components/schemas/ServerResponse" }
           example: { message: "Erreur interne du serveur", status: false }
 
+  # Les objets JSON envoyés et reçus
   schemas:
+    # Le format de toutes les réponses simples (message + succès ou erreur)
     ServerResponse:
       type: object
       properties:
@@ -560,6 +581,7 @@ components:
           type: boolean
           description: true = succès, false = erreur
 
+    # Le serveur ignore les champs en lecture seule (readOnly) s'ils sont envoyés
     ClientDto:
       type: object
       required: [nom]

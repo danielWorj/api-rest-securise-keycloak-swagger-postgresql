@@ -1,64 +1,80 @@
+# Ici je ne mets aucune valeur en dur : tout vient du fichier .env
+# (regarde .env.example pour voir la liste des variables à remplir).
+# Si on lance l'appli avec Docker, les vraies variables d'environnement
+# passent avant le .env, donc pas de souci.
+# Volontairement pas de valeur par défaut : si une variable manque,
+# l'appli plante au démarrage et on voit tout de suite laquelle.
 spring:
   application:
     name: transaction
 
-  # Pour la connexion à la base de données, on peut utiliser des variables d'environnement (ou des valeurs par défaut)
+  # Là on dit à Spring d'aller lire le .env à la racine du projet.
+  # Le "optional" évite une erreur quand il n'y a pas de .env (Docker, CI...).
+  config:
+    import: optional:file:.env[.properties]
+
+  # Connexion à PostgreSQL
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/banque}
-    username: ${DB_USER:postgres}
-    password: ${DB_PASSWORD:postgres}
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
 
   jpa:
     hibernate:
-      ddl-auto: update        # DEV uniquement. En production : Flyway/Liquibase + "validate"
+      # "update" c'est pratique en dev, mais en prod on utilise "validate" avec Flyway ou Liquibase
+      ddl-auto: ${JPA_DDL_AUTO}
     open-in-view: false
-    show-sql: false           # passez à true ponctuellement pour déboguer
+    # Mettre à true dans le .env si on veut voir les requêtes SQL pour débugger
+    show-sql: ${JPA_SHOW_SQL}
     properties:
       hibernate:
         format_sql: true
- #   volet Securite
+
+  # Sécurité : l'API vérifie les jetons envoyés par Keycloak
   security:
     oauth2:
       resourceserver:
         jwt:
-          # 1) Valeur attendue du claim "iss" dans le jeton = URL PUBLIQUE de Keycloak
-          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8585/realms/banque/protocol/openid-connect/token}
-          # 2) URL où l'API va chercher les clés = URL INTERNE (dans Docker : http://keycloak:8080/...)
-          jwk-set-uri: ${KEYCLOAK_JWK_URI:http://localhost:8585/realms/banque/protocol/openid-connect/token/protocol/openid-connect/certs}
-jwt:
-  auth:
-    converter:
-      resource-id: app-transaction-client #Nom du client server
-      principal-attribute: preferred_username # claim du token utilisé comme nom d'utilisateur (corrige : principal_ursername -> preferred_username)
-server:
-  port: ${SERVER_PORT:8282}   # 8080 est réservé à Keycloak
+          # Doit être exactement le "iss" qu'on trouve dans le jeton.
+          # C'est l'adresse du realm (pas celle de /token), vue depuis l'interface de OPENID EndPoint Configuration.
+          issuer-uri: ${KEYCLOAK_PUBLIC_URL}/realms/${KEYCLOAK_REALM}
+          # Là l'API va chercher les clés pour vérifier la signature.
+          # Dans Docker il faut l'adresse interne (genre http://keycloak:8080).
+          jwk-set-uri: ${KEYCLOAK_INTERNAL_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/certs
 
+server:
+  port: ${SERVER_PORT}
+
+# On expose juste health et info, rien d'autre
 management:
   endpoints:
     web:
       exposure:
-        include: health,info  # rien d'autre n'est exposé
+        include: health,info
 
 app:
   keycloak:
-    public-url: ${APP_KEYCLOAK_PUBLIC_URL:http://localhost:8585/realms/banque/protocol/openid-connect/token}   # utilisé par Swagger UI
+    # Adresse du realm pour le navigateur. Le code Java (OpenApiConfig)
+    # rajoute lui-même /protocol/openid-connect/auth et /token derrière.
+    public-url: ${KEYCLOAK_PUBLIC_URL}/realms/${KEYCLOAK_REALM}
   cors:
-    allowed-origins: ${APP_CORS_ORIGINS:http://localhost:4200}                   # votre futur front
+    # Les adresses qui ont le droit d'appeler l'API ,le front par exemple
+    allowed-origins: ${APP_CORS_ORIGINS}
 
 springdoc:
   api-docs:
+    enabled: ${SWAGGER_ENABLED}
     path: /v3/api-docs
   swagger-ui:
-    url: /openapi/openapi.yaml
+    enabled: ${SWAGGER_ENABLED}
     path: /swagger-ui.html
     persist-authorization: true
     display-request-duration: true
     operations-sorter: alpha
     tags-sorter: alpha
     oauth:
-      client-id: banque-swagger
+      # Le client Keycloak utilisé par le bouton "Authorize" de Swagger
+      client-id: ${KEYCLOAK_SWAGGER_CLIENT_ID}
       use-pkce-with-authorization-code-grant: true
-  # Ne documenter que le package des contrôleurs
+  # On ne documente que notre package
   packages-to-scan: com.banque.transaction
-
-
