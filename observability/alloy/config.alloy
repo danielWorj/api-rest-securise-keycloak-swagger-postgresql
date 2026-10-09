@@ -1,0 +1,50 @@
+// Grafana Alloy : lit les logs des conteneurs Docker et les envoie à Loki.
+// (Promtail est en fin de vie, Alloy est son remplaçant officiel.)
+
+discovery.docker "conteneurs" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "conteneurs" {
+  targets = discovery.docker.conteneurs.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+  // nom du service dans docker-compose : api, keycloak, postgres, ...
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+}
+
+loki.source.docker "conteneurs" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.conteneurs.output
+  forward_to = [loki.process.logs.receiver]
+}
+
+loki.process "logs" {
+  // L'API écrit du JSON (format "logstash" de Spring Boot) : on en extrait le niveau
+  // pour en faire un label (cardinalité faible : TRACE..ERROR).
+  stage.match {
+    selector = "{service=\"api\"}"
+
+    stage.json {
+      expressions = { level = "level" }
+    }
+    stage.labels {
+      values = { level = "" }
+    }
+  }
+
+  forward_to = [loki.write.loki.receiver]
+}
+
+loki.write "loki" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

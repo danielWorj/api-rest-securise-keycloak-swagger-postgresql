@@ -95,6 +95,12 @@
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
 
+		<!-- Métriques au format Prometheus (/actuator/prometheus). Version gérée par le BOM Spring Boot -->
+		<dependency>
+			<groupId>io.micrometer</groupId>
+			<artifactId>micrometer-registry-prometheus</artifactId>
+		</dependency>
+
 		<!-- Tests : @WithMockUser, jwt() de MockMvc... -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

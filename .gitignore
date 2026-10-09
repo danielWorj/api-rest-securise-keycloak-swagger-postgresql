@@ -37,3 +37,5 @@ build/
 *.md
 .env
 !.env.example
+keycloak
+docker-compose.ymlobservability

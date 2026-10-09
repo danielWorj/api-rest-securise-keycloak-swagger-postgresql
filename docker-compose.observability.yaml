@@ -1,0 +1,115 @@
+# Surcouche d'observabilité : Prometheus (métriques) + Loki (logs) + Grafana (visualisation).
+#
+# Dev :
+#   docker compose -f docker-compose.yaml -f docker-compose.observability.yaml up --build
+# Prod (sur le serveur) :
+#   docker compose -f docker-compose.prod.yaml -f docker-compose.observability.yaml up -d
+#
+#   Grafana    : http://localhost:3000   (GRAFANA_ADMIN_USER / GRAFANA_ADMIN_PASSWORD du .env)
+#   Prometheus : http://localhost:9090   (liées à 127.0.0.1 : jamais exposées publiquement)
+#
+# Variables .env en plus : GRAFANA_ADMIN_PASSWORD (obligatoire), GRAFANA_ADMIN_USER (défaut : admin),
+#                          GRAFANA_PORT (défaut : 3000), PROMETHEUS_PORT (défaut : 9090)
+
+services:
+
+  # ---- Services existants : on active juste ce qu'il faut ----
+  api:
+    environment:
+      # Actuators (health + prometheus) sur un port séparé, NON publié : seul le réseau Docker y accède.
+      MANAGEMENT_SERVER_PORT: "8283"
+      # Logs JSON (1 ligne = 1 objet) : Loki/Grafana peuvent filtrer sur level, logger_name...
+      LOGGING_STRUCTURED_FORMAT_CONSOLE: logstash
+    # /actuator/health a changé de port : on remplace le HEALTHCHECK du Dockerfile
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8283/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 40s
+      retries: 3
+
+  keycloak:
+    environment:
+      KC_METRICS_ENABLED: "true"      # /metrics sur le port de management 9000
+
+  # ---- Métriques ----
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    container_name: banque-prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - banque_promdata:/prometheus
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    networks: [banque-net]
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.17.1
+    container_name: banque-postgres-exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_URI: postgres:5432/${DB_NAME}?sslmode=disable
+      DATA_SOURCE_USER: ${DB_USER}
+      DATA_SOURCE_PASS: ${DB_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [banque-net]
+
+  # ---- Logs ----
+  loki:
+    image: grafana/loki:3.5.0
+    container_name: banque-loki
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/loki-config.yaml"]
+    volumes:
+      - ./observability/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - banque_lokidata:/loki
+    networks: [banque-net]          # pas de port publié : seul Grafana/Alloy y accèdent
+
+  # Collecteur : lit les logs de TOUS les conteneurs via le socket Docker et les pousse dans Loki
+  alloy:
+    image: grafana/alloy:v1.9.0
+    container_name: banque-alloy
+    restart: unless-stopped
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - banque_alloydata:/var/lib/alloy/data
+    depends_on: [loki]
+    networks: [banque-net]
+
+  # ---- Visualisation ----
+  grafana:
+    image: grafana/grafana:12.0.0
+    container_name: banque-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD manquant}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - banque_grafanadata:/var/lib/grafana
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    depends_on: [prometheus, loki]
+    networks: [banque-net]
+
+volumes:
+  banque_promdata:
+  banque_lokidata:
+  banque_alloydata:
+  banque_grafanadata:
