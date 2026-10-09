@@ -1,0 +1,111 @@
+# Lancement : docker compose up --build
+#   API / Swagger : http://localhost:8282/swagger-ui.html
+#   Keycloak      : http://localhost:8585  (console admin : KEYCLOAK_ADMIN / KEYCLOAK_ADMIN_PASSWORD du .env)
+
+services:
+
+  # On commence base de données de l'API
+  postgres:
+    image: postgres:17-alpine
+    container_name: banque-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - banque_pgdata:/var/lib/postgresql/data #stockage des datas
+    networks: [banque-net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Ensuite base de données de Keycloak
+  keycloak-db:
+    image: postgres:17-alpine
+    container_name: banque-keycloak-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${KC_DB_NAME}
+      POSTGRES_USER: ${KC_DB_USER}
+      POSTGRES_PASSWORD: ${KC_DB_PASSWORD}
+    volumes:
+      - banque_kcdata:/var/lib/postgresql/data
+    networks: [banque-net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Keycloak (serveur d'identité)
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.2
+    container_name: banque-keycloak
+    restart: unless-stopped
+    # start-dev = HTTP sans TLS. Pour la prod : "start" + HTTPS + vrai hostname.
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/${KC_DB_NAME}
+      KC_DB_USERNAME: ${KC_DB_USER}
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD}
+      # URL publique figée => le claim "iss" des jetons recupere apres Keycloak settings ,
+      # que l'on passe par le navigateur (localhost:8585) .
+      KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL}
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "${KEYCLOAK_PORT}:8080"
+    volumes:
+      - ./keycloak/realm-banque.json:/opt/keycloak/data/import/realm-banque.json:ro
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    networks: [banque-net]
+    healthcheck:
+      # pas de curl dans l'image : test TCP/HTTP en bash sur le port de management (9000)
+      test:
+        - CMD-SHELL
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9000 &&
+          echo -e 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q '"status": "UP"' <&3
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+
+  # API Spring Boot
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: banque-api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080
+    ports:
+      - "${SERVER_PORT}:${SERVER_PORT}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    networks: [banque-net]
+
+networks:
+  banque-net:
+    driver: bridge
+
+volumes:
+  banque_pgdata:
+  banque_kcdata:
