@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DataJpaTest
-// Par défaut @DataJpaTest remplace la base par une base embarquée : on le désactive pour garder PostgreSQL
+// pas de base embarquée, on garde le vrai postgres
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 class CompteRepositoryIT {
@@ -52,6 +52,7 @@ class CompteRepositoryIT {
         Client client = nouveauClient();
         compteRepository.saveAndFlush(nouveauCompte(client, "CPT0000000002"));
 
+        // même numéro une 2e fois -> la contrainte unique doit sauter
         assertThatThrownBy(() -> compteRepository.saveAndFlush(nouveauCompte(client, "CPT0000000002")))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
@@ -63,7 +64,7 @@ class CompteRepositoryIT {
         assertThat(compteRepository.findByIdForUpdate(compte.getId())).isPresent();
     }
 
-    // ------------------------------------------------------------------ helpers
+    // helpers
 
     private Client nouveauClient() {
         Client client = new Client();

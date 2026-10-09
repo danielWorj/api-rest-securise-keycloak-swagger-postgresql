@@ -1,10 +1,9 @@
-# Profil "test" : ne contient QUE les valeurs fixes.
-# Les propriétés dépendant des conteneurs (datasource.*, issuer-uri, jwk-set-uri, app.keycloak.public-url)
-# sont injectées dynamiquement par AbstractIntegrationTest.
+# profil test : seulement les valeurs fixes
+# datasource, issuer-uri, jwk-set-uri et app.keycloak.public-url sont injectés par AbstractIntegrationTest
 spring:
   jpa:
     hibernate:
-      # Le schéma est créé automatiquement dans la base PostgreSQL toute neuve
+      # le schéma est recréé dans la base postgres vierge
       ddl-auto: create-drop
     show-sql: false
 

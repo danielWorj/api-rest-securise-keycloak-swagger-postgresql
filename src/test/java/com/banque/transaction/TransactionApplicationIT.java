@@ -15,11 +15,12 @@ class TransactionApplicationIT extends AbstractIntegrationTest {
 
     @Test
     void contextLoads() {
-        // Si ce test passe : Postgres + Keycloak + Spring + schéma Hibernate fonctionnent ensemble.
+        // si ça passe, postgres + keycloak + spring démarrent bien ensemble
     }
 
     @Test
     void keycloakEmetDesJetonsAvecLeBonEmetteurEtLesBonsRoles() {
+        // on décode le payload du jwt à la main
         String payload = new String(
                 Base64.getUrlDecoder().decode(rawToken(ADMIN).split("\\.")[1]), StandardCharsets.UTF_8);
 

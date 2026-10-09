@@ -25,20 +25,20 @@ class ParcoursBancaireIT extends AbstractIntegrationTest {
 
     @BeforeEach
     void donneesDeBase() throws Exception {
-        creerClient(CLIENT_ID, "Client Un");          // = utilisateur "client1" de Keycloak
-        creerClient(AUTRE_CLIENT_ID, "Autre Client"); // client sans compte Keycloak
+        creerClient(CLIENT_ID, "Client Un");          // c'est client1 dans keycloak
+        creerClient(AUTRE_CLIENT_ID, "Autre Client"); // pas de user keycloak pour lui
         compteDeClient1 = creerCompte(CLIENT_ID);
         compteDeLAutre = creerCompte(AUTRE_CLIENT_ID);
     }
 
-    // ---------------------------------------------------------------- dépôts / retraits
+    // dépôts / retraits
 
     @Test
     @DisplayName("Dépôt de 1000 puis retrait de 300 : solde final 700")
     void depotPuisRetrait() throws Exception {
         deposer(CLIENT_ID, compteDeClient1, "1000.00")
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.secretaire").value(SECRETAIRE)); // lu dans le JWT, pas dans le corps
+                .andExpect(jsonPath("$.secretaire").value(SECRETAIRE)); // vient du jwt, pas du body
 
         retirer(CLIENT, compteDeClient1, "300.00")
                 .andExpect(status().isCreated());
@@ -65,7 +65,7 @@ class ParcoursBancaireIT extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.status").value(false));
 
         assertThat(solde(compteDeClient1)).isEqualByComparingTo("100.00");
-        assertThat(retraitRepository.count()).isZero();   // rien n'a été enregistré (transaction annulée)
+        assertThat(retraitRepository.count()).isZero();   // rien d'enregistré, rollback ok
     }
 
     @Test
@@ -78,7 +78,7 @@ class ParcoursBancaireIT extends AbstractIntegrationTest {
         assertThat(solde(compteDeLAutre)).isEqualByComparingTo("200.00");
     }
 
-    // ---------------------------------------------------------------- propriété des données (AccessGuard)
+    // propriété des données (AccessGuard)
 
     @Test
     @DisplayName("Un CLIENT lit son compte (200) mais pas celui d'un autre (403)")
@@ -90,7 +90,7 @@ class ParcoursBancaireIT extends AbstractIntegrationTest {
         mockMvc.perform(get("/api/compte/findbyid/" + compteDeLAutre).header(AUTHORIZATION, bearer(CLIENT)))
                 .andExpect(status().isForbidden());
 
-        // le personnel, lui, peut tout lire
+        // le staff peut tout lire
         mockMvc.perform(get("/api/compte/findbyid/" + compteDeLAutre).header(AUTHORIZATION, bearer(SECRETAIRE)))
                 .andExpect(status().isOk());
     }
@@ -104,7 +104,7 @@ class ParcoursBancaireIT extends AbstractIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
-    // ---------------------------------------------------------------- validation
+    // validation
 
     @Test
     @DisplayName("Validation : montant nul, à 3 décimales ou compte inconnu")
@@ -113,6 +113,7 @@ class ParcoursBancaireIT extends AbstractIntegrationTest {
         deposer(CLIENT_ID, compteDeClient1, "10.123").andExpect(status().isBadRequest());
         deposer(CLIENT_ID, UUID.randomUUID(), "10.00").andExpect(status().isNotFound());
 
+        // json cassé
         mockMvc.perform(post("/api/depot/create")
                         .header(AUTHORIZATION, bearer(SECRETAIRE))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -120,7 +121,7 @@ class ParcoursBancaireIT extends AbstractIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
-    // ---------------------------------------------------------------- suppressions (R8 + clés étrangères)
+    // suppressions (R8 + clés étrangères)
 
     @Test
     @DisplayName("R8 : suppression d'un compte avec solde -> 409 ; compte vide -> 200")

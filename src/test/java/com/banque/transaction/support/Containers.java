@@ -8,10 +8,8 @@ import org.testcontainers.utility.MountableFile;
 
 import java.time.Duration;
 
-/**
- * Conteneurs partagés par TOUS les tests d'intégration (démarrés une seule fois par JVM).
- * Les versions d'image sont celles de docker-compose.yaml.
- */
+// conteneurs partagés par tous les IT, lancés une seule fois par JVM
+// (mêmes versions d'images que le docker-compose)
 public final class Containers {
 
     public static final String REALM = "banque";
@@ -24,22 +22,22 @@ public final class Containers {
                     .withCommand("start-dev", "--import-realm")
                     .withEnv("KC_BOOTSTRAP_ADMIN_USERNAME", "admin")
                     .withEnv("KC_BOOTSTRAP_ADMIN_PASSWORD", "admin")
-                    // le realm du projet (voir <testResources> dans le pom.xml)
+                    // le realm est copié dans les test-classes par le pom (testResources)
                     .withCopyFileToContainer(
                             MountableFile.forClasspathResource("keycloak/realm-banque.json", 0644),
                             "/opt/keycloak/data/import/realm-banque.json")
                     .withExposedPorts(8080)
-                    // /realms/banque ne répond 200 qu'une fois le realm importé
+                    // répond 200 seulement quand le realm est importé
                     .waitingFor(Wait.forHttp("/realms/" + REALM)
                             .forPort(8080)
                             .withStartupTimeout(Duration.ofMinutes(3)));
 
     static {
-        // Démarrage en parallèle : on gagne ~15-20 s
+        // démarrage en parallèle, ça fait gagner 15-20 s
         Startables.deepStart(POSTGRES, KEYCLOAK).join();
     }
 
-    /** URL du realm telle que vue depuis la JVM de test (= valeur du claim "iss" des jetons). */
+    // url du realm vue depuis la JVM de test, = claim "iss" des tokens
     public static String realmUrl() {
         return "http://" + KEYCLOAK.getHost() + ":" + KEYCLOAK.getMappedPort(8080) + "/realms/" + REALM;
     }

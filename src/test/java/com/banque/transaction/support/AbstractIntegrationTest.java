@@ -37,7 +37,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 public abstract class AbstractIntegrationTest {
 
-    // --- Identifiants fixes des utilisateurs de keycloak/realm-banque.json (= claim "sub") ---
+    // ids des users de keycloak/realm-banque.json (= le "sub" du token)
     protected static final UUID ADMIN_ID = UUID.fromString("11111111-1111-4111-8111-111111111111");
     protected static final UUID SECRETAIRE_ID = UUID.fromString("22222222-2222-4222-8222-222222222222");
     protected static final UUID CLIENT_ID = UUID.fromString("33333333-3333-4333-8333-333333333333");
@@ -48,7 +48,7 @@ public abstract class AbstractIntegrationTest {
     private static final String PASSWORD = "Passw0rd!";
 
     private static final HttpClient HTTP = HttpClient.newHttpClient();
-    /** Un jeton vit 30 min dans le realm : on le demande une seule fois par utilisateur. */
+    // un token dure 30 min, donc une seule demande par user
     private static final Map<String, String> TOKENS = new ConcurrentHashMap<>();
 
     @Autowired protected MockMvc mockMvc;
@@ -57,7 +57,7 @@ public abstract class AbstractIntegrationTest {
     @Autowired protected DepotRepository depotRepository;
     @Autowired protected RetraitRepository retraitRepository;
 
-    /** Branche Spring sur les conteneurs (leurs ports changent à chaque exécution). */
+    // les ports des conteneurs changent à chaque run, on les injecte ici
     @DynamicPropertySource
     static void containersProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", Containers.POSTGRES::getJdbcUrl);
@@ -71,7 +71,7 @@ public abstract class AbstractIntegrationTest {
         registry.add("app.keycloak.public-url", () -> realmUrl);
     }
 
-    /** Les conteneurs sont partagés : on repart d'une base vide avant chaque test (ordre = clés étrangères). */
+    // conteneurs partagés -> on vide la base avant chaque test (dans l'ordre des FK)
     @BeforeEach
     protected void viderLaBase() {
         retraitRepository.deleteAllInBatch();
@@ -80,18 +80,18 @@ public abstract class AbstractIntegrationTest {
         clientRepository.deleteAllInBatch();
     }
 
-    // ------------------------------------------------------------------ jetons
+    // jetons
 
     protected String rawToken(String username) {
         return TOKENS.computeIfAbsent(username, AbstractIntegrationTest::fetchToken);
     }
 
-    /** Valeur prête pour l'en-tête Authorization. */
+    // à mettre tel quel dans le header Authorization
     protected String bearer(String username) {
         return "Bearer " + rawToken(username);
     }
 
-    /** Vrai login auprès de Keycloak (grant "password" autorisé pour le client swagger-ui). */
+    // vrai login sur keycloak (grant password activé sur le client swagger-ui)
     private static String fetchToken(String username) {
         try {
             String form = "grant_type=password&client_id=swagger-ui"
@@ -116,9 +116,9 @@ public abstract class AbstractIntegrationTest {
         }
     }
 
-    // ------------------------------------------------------------------ helpers métier
+    // helpers métier
 
-    /** Crée un client (en ADMIN). Son id doit être le "sub" du jeton s'il doit se connecter. */
+    // création d'un client en ADMIN (son id doit être le sub du token s'il doit se connecter)
     protected void creerClient(UUID id, String nom) throws Exception {
         mockMvc.perform(post("/api/client/create")
                         .header(AUTHORIZATION, bearer(ADMIN))
@@ -129,7 +129,7 @@ public abstract class AbstractIntegrationTest {
                 .andExpect(status().isCreated());
     }
 
-    /** Crée un compte (en ADMIN) et renvoie son id. */
+    // création d'un compte en ADMIN, renvoie l'id
     protected UUID creerCompte(UUID clientId) throws Exception {
         String body = mockMvc.perform(post("/api/compte/create")
                         .header(AUTHORIZATION, bearer(ADMIN))
@@ -142,7 +142,7 @@ public abstract class AbstractIntegrationTest {
         return UUID.fromString(JsonPath.read(body, "$.id"));
     }
 
-    /** Dépôt enregistré par la secrétaire. */
+    // dépôt fait par la secrétaire
     protected ResultActions deposer(UUID deposantId, UUID compteId, String montant) throws Exception {
         return mockMvc.perform(post("/api/depot/create")
                 .header(AUTHORIZATION, bearer(SECRETAIRE))
@@ -152,7 +152,7 @@ public abstract class AbstractIntegrationTest {
                         """.formatted(deposantId, compteId, montant)));
     }
 
-    /** Retrait demandé par l'utilisateur donné (le clientId du corps est de toute façon ignoré par l'API). */
+    // retrait demandé par le user donné (le clientId du body est ignoré par l'API)
     protected ResultActions retirer(String username, UUID compteId, String montant) throws Exception {
         return mockMvc.perform(post("/api/retrait/create")
                 .header(AUTHORIZATION, bearer(username))
@@ -162,7 +162,7 @@ public abstract class AbstractIntegrationTest {
                         """.formatted(compteId, montant)));
     }
 
-    /** Solde lu DIRECTEMENT en base (on vérifie l'état réel, pas seulement la réponse HTTP). */
+    // solde lu directement en base, pas juste la réponse http
     protected BigDecimal solde(UUID compteId) {
         return compteRepository.findById(compteId).orElseThrow().getSolde();
     }

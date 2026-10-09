@@ -23,7 +23,7 @@ class RetraitsConcurrentsIT extends AbstractIntegrationTest {
         UUID compte = creerCompte(CLIENT_ID);
         deposer(CLIENT_ID, compte, "100.00");
 
-        rawToken(CLIENT); // on récupère le jeton AVANT de lancer les threads
+        rawToken(CLIENT); // token récupéré avant de lancer les threads
 
         int nbRetraits = 5;
         ExecutorService pool = Executors.newFixedThreadPool(nbRetraits);
@@ -32,7 +32,7 @@ class RetraitsConcurrentsIT extends AbstractIntegrationTest {
 
         for (int i = 0; i < nbRetraits; i++) {
             resultats.add(pool.submit(() -> {
-                depart.await();                                   // tous partent en même temps
+                depart.await();   // tout le monde attend le top départ
                 return retirer(CLIENT, compte, "30.00").andReturn().getResponse().getStatus();
             }));
         }

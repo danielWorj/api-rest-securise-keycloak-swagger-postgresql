@@ -38,31 +38,29 @@ class SecuriteIT extends AbstractIntegrationTest {
         mockMvc.perform(get("/v3/api-docs")).andExpect(status().isOk());
     }
 
-    /**
-     * Matrice des droits : utilisateur, méthode, URL, statut attendu.
-     * Les refus (403) interviennent AVANT la validation du corps : un "{}" suffit.
-     */
+    // colonnes : user, méthode, url, statut attendu
+    // les 403 tombent avant la validation du body, donc "{}" suffit
     @ParameterizedTest(name = "{0} {1} {2} -> {3}")
     @CsvSource({
-            // consultation globale : personnel uniquement
+            // lecture globale : staff seulement
             "admin1,       GET,    /api/client/all,   200",
             "secretaire1,  GET,    /api/client/all,   200",
             "client1,      GET,    /api/client/all,   403",
             "client1,      GET,    /api/compte/all,   403",
             "client1,      GET,    /api/depot/all,    403",
             "client1,      GET,    /api/retrait/all,  403",
-            // création de client : personnel uniquement
+            // création de client : staff seulement
             "client1,      POST,   /api/client/create, 403",
-            // dépôt : SECRETAIRE seulement (même pas ADMIN)
+            // dépôt : secrétaire uniquement, même pas l'admin
             "admin1,       POST,   /api/depot/create,  403",
             "client1,      POST,   /api/depot/create,  403",
-            // retrait : CLIENT seulement
+            // retrait : client uniquement
             "secretaire1,  POST,   /api/retrait/create, 403",
             "admin1,       POST,   /api/retrait/create, 403",
-            // suppression : ADMIN seulement
+            // suppression : admin uniquement
             "secretaire1,  DELETE, /api/client/delete/00000000-0000-0000-0000-000000000001, 403",
             "client1,      DELETE, /api/compte/delete/00000000-0000-0000-0000-000000000001, 403",
-            // tout le reste est refusé par défaut (denyAll)
+            // le reste est bloqué par défaut (denyAll)
             "admin1,       GET,    /nimporte/quoi,     403"
     })
     void matriceDesDroits(String username, String method, String url, int statutAttendu) throws Exception {
