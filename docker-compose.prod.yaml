@@ -1,0 +1,137 @@
+# Docker Compose de PRODUCTION (fichier autonome, à utiliser seul).
+#
+# Différences avec docker-compose.yaml (dev) :
+#   - l'API vient de l'image publiée par le CD sur GHCR (pas de "build:")
+#   - Keycloak démarre en mode "start" (et non "start-dev"), derrière un reverse proxy HTTPS
+#   - aucun port exposé publiquement : tout est lié à 127.0.0.1, c'est le reverse proxy
+#     (Nginx, Caddy, Traefik...) qui reçoit le trafic HTTPS et le redirige
+#   - le realm de production est un fichier distinct, sans utilisateurs de test
+#
+# Utilisation (sur le serveur, dans le dossier DEPLOY_PATH, ex. /opt/banque) :
+#   docker compose -f docker-compose.prod.yaml pull api
+#   docker compose -f docker-compose.prod.yaml up -d
+#
+# Fichiers nécessaires dans ce dossier :
+#   .env                              (variables ci-dessous)
+#   docker-compose.prod.yaml          (ce fichier)
+#   keycloak/realm-banque-prod.json   (realm SANS les utilisateurs de test)
+#
+# Variables du .env utilisées ici :
+#   API_IMAGE (obligatoire, en minuscules, ex. ghcr.io/danielworj/api-rest-securise-keycloak-swagger-postgresql)
+#   API_TAG (fourni par le CD, "latest" par défaut)
+#   DB_NAME DB_USER DB_PASSWORD
+#   KC_DB_NAME KC_DB_USER KC_DB_PASSWORD
+#   KEYCLOAK_ADMIN KEYCLOAK_ADMIN_PASSWORD
+#   KEYCLOAK_PUBLIC_URL (ex. https://auth.votre-domaine, SANS /realms/...)
+#   KEYCLOAK_PORT (ex. 8585)   SERVER_PORT (ex. 8282)
+#   + les autres variables lues par application.yaml (KEYCLOAK_REALM, JPA_DDL_AUTO,
+#     JPA_SHOW_SQL, SWAGGER_ENABLED, APP_CORS_ORIGINS, KEYCLOAK_SWAGGER_CLIENT_ID)
+
+services:
+
+  # Base de données de l'API
+  postgres:
+    image: postgres:17-alpine
+    container_name: banque-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: ${DB_NAME:?DB_NAME manquant}
+      POSTGRES_USER: ${DB_USER:?DB_USER manquant}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD manquant}
+    volumes:
+      - banque_pgdata:/var/lib/postgresql/data
+    networks: [banque-net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Base de données de Keycloak
+  keycloak-db:
+    image: postgres:17-alpine
+    container_name: banque-keycloak-db
+    restart: always
+    environment:
+      POSTGRES_DB: ${KC_DB_NAME:?KC_DB_NAME manquant}
+      POSTGRES_USER: ${KC_DB_USER:?KC_DB_USER manquant}
+      POSTGRES_PASSWORD: ${KC_DB_PASSWORD:?KC_DB_PASSWORD manquant}
+    volumes:
+      - banque_kcdata:/var/lib/postgresql/data
+    networks: [banque-net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Keycloak (serveur d'identité), derrière un reverse proxy qui gère le HTTPS
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.2
+    container_name: banque-keycloak
+    restart: always
+    command: ["start", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:?KEYCLOAK_ADMIN manquant}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD manquant}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/${KC_DB_NAME}
+      KC_DB_USERNAME: ${KC_DB_USER}
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD}
+      # URL publique en https : c'est elle qui devient le claim "iss" des jetons
+      KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL:?KEYCLOAK_PUBLIC_URL manquant}
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      # le TLS est terminé par le reverse proxy : Keycloak reçoit du HTTP
+      # et fait confiance aux en-têtes X-Forwarded-* envoyés par le proxy
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      # uniquement en local : le reverse proxy pointe vers 127.0.0.1:KEYCLOAK_PORT
+      - "127.0.0.1:${KEYCLOAK_PORT:-8585}:8080"
+    volumes:
+      - ./keycloak/realm-banque-prod.json:/opt/keycloak/data/import/realm-banque.json:ro
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    networks: [banque-net]
+    healthcheck:
+      # pas de curl dans l'image : test HTTP en bash sur le port de management (9000)
+      test:
+        - CMD-SHELL
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9000 &&
+          echo -e 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q '"status": "UP"' <&3
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+
+  # API Spring Boot : image publiée par le CD
+  api:
+    image: ${API_IMAGE:?API_IMAGE manquant (ex. ghcr.io/proprietaire/depot, en minuscules)}:${API_TAG:-latest}
+    container_name: banque-api
+    restart: always
+    env_file: .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080
+    ports:
+      # uniquement en local : le reverse proxy pointe vers 127.0.0.1:SERVER_PORT
+      - "127.0.0.1:${SERVER_PORT:-8282}:${SERVER_PORT:-8282}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    networks: [banque-net]
+
+networks:
+  banque-net:
+    driver: bridge
+
+volumes:
+  banque_pgdata:
+  banque_kcdata:
