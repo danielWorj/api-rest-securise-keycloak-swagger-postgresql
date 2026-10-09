@@ -1,0 +1,639 @@
+openapi: 3.0.3
+info:
+  title: API Banque
+  version: "1.0"
+  description: |
+    Dépôts et retraits sécurisés par Keycloak (OAuth2 / OIDC).
+
+    **Rôles** : `ADMIN`, `SECRETAIRE`, `CLIENT`
+    - SECRETAIRE : crée les dépôts
+    - CLIENT : effectue ses propres retraits
+    - ADMIN / SECRETAIRE : consultation globale, création de clients et de comptes
+    - ADMIN : suppressions
+
+    Toutes les erreurs ont le format `{ "message": "...", "status": false }`.
+  contact:
+    name: Équipe Banque
+    email: contact@example.com
+
+servers:
+  - url: http://localhost:8081
+    description: Développement local
+
+tags:
+  - name: Clients
+    description: Gestion des clients de la banque
+  - name: Comptes
+    description: Gestion des comptes bancaires
+  - name: Dépôts
+    description: Versements d'argent sur un compte (réservé à la secrétaire)
+  - name: Retraits
+    description: Retraits d'argent (réservé au client, depuis son propre compte)
+
+security:
+  - keycloak-oauth2: [openid]
+  - bearer-jwt: []
+
+paths:
+  # ------------------------------------------------------------------ CLIENTS
+  /api/client/create:
+    post:
+      tags: [Clients]
+      operationId: createClient
+      summary: Créer un client
+      description: "Rôles requis : **ADMIN** ou **SECRETAIRE**. L'`id` est optionnel (correspond au `sub` Keycloak) ; il est généré s'il est absent."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ClientDto" }
+      responses:
+        "201":
+          description: Client créé
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ClientDto" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409":
+          description: Un client avec cet identifiant existe déjà
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServerResponse" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/client/all:
+    get:
+      tags: [Clients]
+      operationId: findAllClient
+      summary: Lister tous les clients
+      description: "Rôles requis : **ADMIN** ou **SECRETAIRE**."
+      responses:
+        "200":
+          description: Liste des clients
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ClientDto" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/client/findbyid/{id}:
+    get:
+      tags: [Clients]
+      operationId: findClientById
+      summary: Consulter un client
+      description: Le personnel (ADMIN / SECRETAIRE) voit tout client ; un **CLIENT** ne voit que sa propre fiche.
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: Client trouvé
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ClientDto" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/client/update/{id}:
+    put:
+      tags: [Clients]
+      operationId: updateClient
+      summary: Modifier un client
+      description: Le personnel peut modifier tout client ; un **CLIENT** ne peut modifier que sa propre fiche.
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ClientDto" }
+      responses:
+        "200":
+          description: Client modifié
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ClientDto" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/client/delete/{id}:
+    delete:
+      tags: [Clients]
+      operationId: deleteClient
+      summary: Supprimer un client
+      description: "Rôle requis : **ADMIN**."
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: Client supprimé
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServerResponse" }
+              example: { message: "Client supprimé avec succès", status: true }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Suppression impossible, des données liées existent
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServerResponse" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  # ------------------------------------------------------------------ COMPTES
+  /api/compte/create:
+    post:
+      tags: [Comptes]
+      operationId: createCompte
+      summary: Créer un compte
+      description: "Rôles requis : **ADMIN** ou **SECRETAIRE**. Le numéro est généré par le serveur et le solde initial est géré côté serveur."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CompteDto" }
+      responses:
+        "201":
+          description: Compte créé
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompteDto" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/compte/all:
+    get:
+      tags: [Comptes]
+      operationId: findAllCompte
+      summary: Lister tous les comptes
+      description: "Rôles requis : **ADMIN** ou **SECRETAIRE**."
+      responses:
+        "200":
+          description: Liste des comptes
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CompteDto" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/compte/findbyid/{id}:
+    get:
+      tags: [Comptes]
+      operationId: findCompteById
+      summary: Consulter un compte
+      description: Le personnel voit tout compte ; un **CLIENT** ne voit que ses propres comptes.
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: Compte trouvé
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompteDto" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/compte/findbyclient/{clientId}:
+    get:
+      tags: [Comptes]
+      operationId: findCompteByClient
+      summary: Comptes d'un client
+      description: Le personnel voit les comptes de tout client ; un **CLIENT** uniquement les siens.
+      parameters:
+        - { $ref: "#/components/parameters/ClientId" }
+      responses:
+        "200":
+          description: Liste des comptes du client
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CompteDto" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/compte/delete/{id}:
+    delete:
+      tags: [Comptes]
+      operationId: deleteCompte
+      summary: Supprimer un compte
+      description: "Rôle requis : **ADMIN**. Impossible si le solde n'est pas nul."
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: Compte supprimé
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServerResponse" }
+              example: { message: "Compte supprimé avec succès", status: true }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Le solde du compte n'est pas nul, ou des données liées existent
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServerResponse" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  # ------------------------------------------------------------------ DEPOTS
+  /api/depot/create:
+    post:
+      tags: [Dépôts]
+      operationId: createDepot
+      summary: Créer un dépôt
+      description: "Rôle requis : **SECRETAIRE**. La secrétaire est lue dans le JWT (`preferred_username`), jamais dans le corps de la requête."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DepotDto" }
+      responses:
+        "201":
+          description: Dépôt créé, le solde du compte est crédité
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DepotDto" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/depot/all:
+    get:
+      tags: [Dépôts]
+      operationId: findAllDepot
+      summary: Lister tous les dépôts
+      description: "Rôles requis : **ADMIN** ou **SECRETAIRE**."
+      responses:
+        "200":
+          description: Liste des dépôts
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/DepotDto" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/depot/findbyid/{id}:
+    get:
+      tags: [Dépôts]
+      operationId: findDepotById
+      summary: Consulter un dépôt
+      description: Le personnel voit tout dépôt ; un **CLIENT** voit les dépôts dont il est le déposant ou le propriétaire du compte.
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: Dépôt trouvé
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DepotDto" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/depot/findbycompte/{compteId}:
+    get:
+      tags: [Dépôts]
+      operationId: findDepotByCompte
+      summary: Dépôts d'un compte
+      parameters:
+        - { $ref: "#/components/parameters/CompteId" }
+      responses:
+        "200":
+          description: Liste des dépôts du compte
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/DepotDto" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/depot/findbyclient/{clientId}:
+    get:
+      tags: [Dépôts]
+      operationId: findDepotByClient
+      summary: Dépôts d'un client
+      parameters:
+        - { $ref: "#/components/parameters/ClientId" }
+      responses:
+        "200":
+          description: Liste des dépôts du client
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/DepotDto" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  # ------------------------------------------------------------------ RETRAITS
+  /api/retrait/create:
+    post:
+      tags: [Retraits]
+      operationId: createRetrait
+      summary: Effectuer un retrait
+      description: |
+        Rôle requis : **CLIENT**.
+        Le `clientId` du corps est ignoré : le retrait est toujours fait pour l'utilisateur du jeton (`sub`).
+        Le compte doit appartenir à ce client et le solde ne peut pas devenir négatif.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RetraitDto" }
+      responses:
+        "201":
+          description: Retrait effectué, le solde du compte est débité
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RetraitDto" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Rôle insuffisant, ou le compte n'appartient pas au client connecté
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServerResponse" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: Solde insuffisant
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServerResponse" }
+              example: { message: "Solde insuffisant : solde actuel 50.00, montant demandé 80.00", status: false }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/retrait/all:
+    get:
+      tags: [Retraits]
+      operationId: findAllRetrait
+      summary: Lister tous les retraits
+      description: "Rôles requis : **ADMIN** ou **SECRETAIRE**."
+      responses:
+        "200":
+          description: Liste des retraits
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RetraitDto" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/retrait/findbyid/{id}:
+    get:
+      tags: [Retraits]
+      operationId: findRetraitById
+      summary: Consulter un retrait
+      description: Le personnel voit tout retrait ; un **CLIENT** uniquement les siens.
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: Retrait trouvé
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RetraitDto" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/retrait/findbycompte/{compteId}:
+    get:
+      tags: [Retraits]
+      operationId: findRetraitByCompte
+      summary: Retraits d'un compte
+      parameters:
+        - { $ref: "#/components/parameters/CompteId" }
+      responses:
+        "200":
+          description: Liste des retraits du compte (du plus récent au plus ancien)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RetraitDto" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/retrait/findbyclient/{clientId}:
+    get:
+      tags: [Retraits]
+      operationId: findRetraitByClient
+      summary: Retraits d'un client
+      parameters:
+        - { $ref: "#/components/parameters/ClientId" }
+      responses:
+        "200":
+          description: Liste des retraits du client (du plus récent au plus ancien)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RetraitDto" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+components:
+  securitySchemes:
+    keycloak-oauth2:
+      type: oauth2
+      description: Connexion via Keycloak (Authorization Code + PKCE)
+      flows:
+        authorizationCode:
+          authorizationUrl: http://localhost:8080/realms/banque/protocol/openid-connect/auth
+          tokenUrl: http://localhost:8080/realms/banque/protocol/openid-connect/token
+          scopes:
+            openid: OpenID Connect
+    bearer-jwt:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Jeton d'accès obtenu auprès de Keycloak
+
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      description: Identifiant de la ressource (UUID)
+      schema: { type: string, format: uuid }
+    ClientId:
+      name: clientId
+      in: path
+      required: true
+      description: Identifiant du client (UUID)
+      schema: { type: string, format: uuid }
+    CompteId:
+      name: compteId
+      in: path
+      required: true
+      description: Identifiant du compte (UUID)
+      schema: { type: string, format: uuid }
+
+  responses:
+    BadRequest:
+      description: Requête invalide (champ manquant ou invalide, JSON illisible, UUID mal formé)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ServerResponse" }
+          example: { message: "montant : Le montant doit être supérieur à 0", status: false }
+    Unauthorized:
+      description: Non authentifié, jeton absent, expiré ou invalide
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ServerResponse" }
+          example: { message: "Authentification requise ou jeton invalide", status: false }
+    Forbidden:
+      description: Accès refusé, rôle insuffisant ou ressource d'un autre client
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ServerResponse" }
+    NotFound:
+      description: Ressource introuvable
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ServerResponse" }
+          example: { message: "Compte introuvable : 7c9e6679-7425-40de-944b-e07fc1f90ae7", status: false }
+    InternalError:
+      description: Erreur interne du serveur
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ServerResponse" }
+          example: { message: "Erreur interne du serveur", status: false }
+
+  schemas:
+    ServerResponse:
+      type: object
+      properties:
+        message: { type: string }
+        status:
+          type: boolean
+          description: true = succès, false = erreur
+
+    ClientDto:
+      type: object
+      required: [nom]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Identifiant Keycloak (claim `sub`). Optionnel à la création, généré s'il est absent.
+        nom:
+          type: string
+          maxLength: 100
+          example: Jean Dupont
+        contact:
+          type: string
+          maxLength: 50
+          example: "+237 6 99 00 00 00"
+
+    CompteDto:
+      type: object
+      required: [clientId]
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        numero:
+          type: string
+          readOnly: true
+          description: Généré par le serveur
+        solde:
+          type: number
+          readOnly: true
+          example: 1500.00
+        dateCreation: { type: string, format: date-time, readOnly: true }
+        clientId:
+          type: string
+          format: uuid
+          description: Client propriétaire du compte
+
+    DepotDto:
+      type: object
+      required: [clientId, compteId, montant]
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        date:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Posée par le serveur
+        clientId: { type: string, format: uuid }
+        compteId: { type: string, format: uuid }
+        montant:
+          type: number
+          minimum: 0.01
+          multipleOf: 0.01
+          example: 150.00
+          description: Supérieur à 0, 2 décimales au maximum
+        secretaire:
+          type: string
+          readOnly: true
+          description: Nom d'utilisateur lu dans le JWT, ignoré s'il est envoyé
+
+    RetraitDto:
+      type: object
+      required: [compteId, montant]
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        date: { type: string, format: date-time, readOnly: true }
+        clientId:
+          type: string
+          format: uuid
+          readOnly: true
+          description: Déduit du jeton (`sub`), toute valeur envoyée est ignorée
+        compteId: { type: string, format: uuid }
+        montant:
+          type: number
+          minimum: 0.01
+          multipleOf: 0.01
+          example: 80.00
+          description: Supérieur à 0, 2 décimales au maximum

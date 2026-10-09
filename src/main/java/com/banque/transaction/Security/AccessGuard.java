@@ -12,16 +12,22 @@ import java.util.UUID;
 @Component("accessGuard")
 @RequiredArgsConstructor
 public class AccessGuard {
+    // Cette classe permet de vérifier si l'utilisateur courant
+    // a le droit d'accéder à certaines ressources (compte, depot, retrait) en fonction de son rôle (staff ou client) et de son identité.
 
+    //Pour cela on va injecter le CurrentUser qui contient les informations de l'utilisateur courant,
+    // ainsi que les repositories des entités Compte, Depot et Retrait pour vérifier si l'utilisateur courant est le propriétaire de la ressource.
     private final CurrentUser me;
     private final CompteRepository compteRepository;
     private final DepotRepository depotRepository;
     private final RetraitRepository retraitRepository;
 
+    //
     public boolean isSelfOrStaff(UUID clientId) {
         return me.isStaff() || me.id().equals(clientId);
     }
 
+    //
     public boolean canAccessCompte(UUID compteId) {
         return me.isStaff() || compteRepository.existsByIdAndClientId(compteId, me.id());
     }

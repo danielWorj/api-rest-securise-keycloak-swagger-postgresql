@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -37,6 +38,17 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(OperationNonAutoriseeException.class)
     public ResponseEntity<ServerResponse> handleForbidden(OperationNonAutoriseeException ex) {
         return build(HttpStatus.FORBIDDEN, ex.getMessage());
+    }
+
+    /**
+     * Refus levé par @PreAuthorize (ex. un CLIENT qui lit le compte d'un autre).
+     * Sans ce handler, handleOthers() l'intercepterait et renverrait un 500 au lieu d'un 403.
+     * (Les refus de rôle faits par SecurityConfig, eux, passent par RestAccessDeniedHandler.)
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ServerResponse> handleAccessDenied(AccessDeniedException ex) {
+        log.warn("Accès refusé : {}", ex.getMessage());
+        return build(HttpStatus.FORBIDDEN, "Accès refusé : droits insuffisants");
     }
 
     /** Échec de @Valid sur un corps de requête : on liste les champs en erreur. */

@@ -22,12 +22,16 @@ spring:
       resourceserver:
         jwt:
           # 1) Valeur attendue du claim "iss" dans le jeton = URL PUBLIQUE de Keycloak
-          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8080/realms/banque}
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8585/realms/banque/protocol/openid-connect/token}
           # 2) URL où l'API va chercher les clés = URL INTERNE (dans Docker : http://keycloak:8080/...)
-          jwk-set-uri: ${KEYCLOAK_JWK_URI:http://localhost:8080/realms/banque/protocol/openid-connect/certs}
-
+          jwk-set-uri: ${KEYCLOAK_JWK_URI:http://localhost:8585/realms/banque/protocol/openid-connect/token/protocol/openid-connect/certs}
+jwt:
+  auth:
+    converter:
+      resource-id: app-transaction-client #Nom du client server
+      principal-attribute: preferred_username # claim du token utilisé comme nom d'utilisateur (corrige : principal_ursername -> preferred_username)
 server:
-  port: ${SERVER_PORT:8081}   # 8080 est réservé à Keycloak
+  port: ${SERVER_PORT:8282}   # 8080 est réservé à Keycloak
 
 management:
   endpoints:
@@ -37,12 +41,24 @@ management:
 
 app:
   keycloak:
-    public-url: ${APP_KEYCLOAK_PUBLIC_URL:http://localhost:8080/realms/banque}   # utilisé par Swagger UI
+    public-url: ${APP_KEYCLOAK_PUBLIC_URL:http://localhost:8585/realms/banque/protocol/openid-connect/token}   # utilisé par Swagger UI
   cors:
     allowed-origins: ${APP_CORS_ORIGINS:http://localhost:4200}                   # votre futur front
 
 springdoc:
+  api-docs:
+    path: /v3/api-docs
   swagger-ui:
+    url: /openapi/openapi.yaml
+    path: /swagger-ui.html
+    persist-authorization: true
+    display-request-duration: true
+    operations-sorter: alpha
+    tags-sorter: alpha
     oauth:
-      client-id: banque-swagger #authentification client pour Swagger UI (Keycloak)
+      client-id: banque-swagger
       use-pkce-with-authorization-code-grant: true
+  # Ne documenter que le package des contrôleurs
+  packages-to-scan: com.banque.transaction
+
+
