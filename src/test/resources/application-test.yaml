@@ -1,0 +1,24 @@
+# Profil "test" : ne contient QUE les valeurs fixes.
+# Les propriétés dépendant des conteneurs (datasource.*, issuer-uri, jwk-set-uri, app.keycloak.public-url)
+# sont injectées dynamiquement par AbstractIntegrationTest.
+spring:
+  jpa:
+    hibernate:
+      # Le schéma est créé automatiquement dans la base PostgreSQL toute neuve
+      ddl-auto: create-drop
+    show-sql: false
+
+server:
+  port: 0
+
+app:
+  cors:
+    allowed-origins: http://localhost:3000
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+    oauth:
+      client-id: swagger-ui
